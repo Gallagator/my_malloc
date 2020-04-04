@@ -5,7 +5,7 @@ struct mem* g_mem_chunk_head =  NULL;
 
 void* _malloc( size_t query ){
     if(g_mem_chunk_head == NULL){
-        if(heap_init(getpagesize() - sizeof(struct mem)) == NULL){
+        if(heap_init(getpagesize()) == NULL){
             return NULL;
         }
     }
@@ -59,9 +59,19 @@ static void* allocate_chunk(struct mem* current_chunk, struct mem* const previou
 
 void* heap_init( size_t initial_size ){
     g_mem_chunk_head = try_mmap(initial_size, HEAP_START);
-    assign_to_chunk(g_mem_chunk_head, NULL, initial_size, true);
+    assign_to_chunk(g_mem_chunk_head, NULL, initial_size - sizeof(struct mem), true);
     return g_mem_chunk_head;
 }
+
+void  _free( void* mem ){
+    struct mem* chunk = mem - sizeof(struct mem);
+    //merge chunks if contiguous and free
+    if(chunk->next->is_free && chunk->next == mem + chunk->capacity){
+        assign_to_chunk(chunk, chunk->next->next, chunk->capacity + chunk->next->capacity + sizeof(mem), true);
+    }
+    chunk->is_free = true;
+}
+
 
 static void* try_mmap(size_t size, void* const addr){
     struct mem* new_chunk = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0);
