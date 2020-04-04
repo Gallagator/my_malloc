@@ -5,12 +5,11 @@
 
 int main() {
  //   int* k = (int*)_malloc(sizeof(int) *   100);
-    int* j = (int*)_malloc(sizeof(int) * 20);
-    uint64_t* l = (uint64_t*)_malloc(sizeof(uint64_t) * 20);
+    uint64_t* l = (uint64_t*)_malloc(getpagesize());
 
 
 //    printf("%d %d %d %d\n", *k, *j, *l, *m);
-    printf("%p %p\n", j, l);
+    printf("%p\n", l);
 
     memalloc_debug_heap(stdout, g_mem_chunk_head);
 

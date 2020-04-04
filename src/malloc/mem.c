@@ -2,12 +2,10 @@
 
 struct mem* g_mem_chunk_head =  NULL;
 
-/*mmap(HEAP_START, len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_FIXED, -1, 0);*/
-
 
 void* _malloc( size_t query ){
     if(g_mem_chunk_head == NULL){
-        if(heap_init(INITIAL_HEAP_SIZE) == NULL){
+        if(heap_init(getpagesize() - sizeof(struct mem)) == NULL){
             return NULL;
         }
     }
@@ -31,20 +29,28 @@ void* _malloc( size_t query ){
     return allocate_chunk(current_chunk, previous_chunk, query);
 }
 
-static void* allocate_chunk(struct mem* const current_chunk, struct mem* const previous_chunk, size_t query){
+static void* allocate_chunk(struct mem* current_chunk, struct mem* const previous_chunk, size_t query){
     if(current_chunk == NULL){
-        struct mem* new_chunk = try_mmap(query + sizeof(struct mem),
-                                         (void*)previous_chunk + previous_chunk->capacity + sizeof(struct mem));
+        size_t pagesize = getpagesize();
+        size_t allocate_size;
+        if(query + sizeof(struct mem) * 2 + BLOCK_MIN_SIZE  < pagesize){
+            allocate_size = pagesize;
+        } else{
+            allocate_size = query + sizeof(struct mem) * 2 + BLOCK_MIN_SIZE;
+        }
+        struct mem* new_chunk = try_mmap(allocate_size,
+                (void*)previous_chunk + previous_chunk->capacity + sizeof(struct mem));
         if(new_chunk == NULL){
             return NULL;
         }
-        assign_to_chunk(new_chunk, NULL, query, false);
+        assign_to_chunk(new_chunk, NULL, allocate_size - sizeof(struct mem), true);
         previous_chunk->next = new_chunk;
-        return (void*)new_chunk + sizeof(struct mem);
+        current_chunk = new_chunk;
+
     }
     /*split chunk in 2 we know there will be space to split in 2 due to when this function is called (see _malloc)*/
     struct mem* next_chunk = (void*)current_chunk + sizeof(struct mem) + query;
-    size_t remaining_capacity = current_chunk->capacity - sizeof(struct mem) * 2 - query;
+    size_t remaining_capacity = current_chunk->capacity - sizeof(struct mem) - query;
     assign_to_chunk(next_chunk, current_chunk->next, remaining_capacity, true);
     assign_to_chunk(current_chunk, next_chunk, query, false);
     return (void*)current_chunk + sizeof(struct mem);
