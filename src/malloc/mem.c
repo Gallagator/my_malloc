@@ -1,7 +1,21 @@
 #include "mem.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <stdbool.h>
+#include <unistd.h>
+
 
 struct mem* g_mem_chunk_head =  NULL;
 
+static void* allocate_chunk(struct mem* const current_chunk, struct mem* const previous_chunk, size_t query);
+
+static void assign_to_chunk(struct mem* chunk, void* next, size_t capacity, bool is_free);
+
+static void* try_mmap(size_t size, void* const addr);
+
+static void* heap_init(size_t initial_size);
 
 void* _malloc( size_t query ){
     if(g_mem_chunk_head == NULL){
@@ -29,6 +43,18 @@ void* _malloc( size_t query ){
     return allocate_chunk(current_chunk, previous_chunk, query);
 }
 
+void  _free( void* mem ){
+    struct mem* chunk = (void *)((uint8_t *)mem - sizeof(struct mem));
+    //merge chunks if contiguous and free
+    if(chunk->next->is_free && chunk->next == (void *)((uint8_t *)mem + chunk->capacity)){
+        assign_to_chunk(chunk, chunk->next->next, chunk->capacity + chunk->next->capacity + sizeof(mem), true);
+    }
+    chunk->is_free = true;
+}
+
+
+// BLOCK_MIN_SIZE is added to ensure that when a chunck is split,
+// each split chunk will be at least BLOCK_MIN_SIZE
 static void* allocate_chunk(struct mem* current_chunk, struct mem* const previous_chunk, size_t query){
     if(current_chunk == NULL){
         size_t pagesize = getpagesize();
@@ -36,10 +62,11 @@ static void* allocate_chunk(struct mem* current_chunk, struct mem* const previou
         if(query + sizeof(struct mem) * 2 + BLOCK_MIN_SIZE  < pagesize){
             allocate_size = pagesize;
         } else{
-            allocate_size = query + sizeof(struct mem) * 2 + BLOCK_MIN_SIZE;
+            size_t block_size = query + sizeof(struct mem) * 2 + BLOCK_MIN_SIZE;
+            allocate_size = pagesize * (block_size % pagesize ? block_size / pagesize + 1 : block_size / pagesize);
         }
         struct mem* new_chunk = try_mmap(allocate_size,
-                (void*)previous_chunk + previous_chunk->capacity + sizeof(struct mem));
+                (uint8_t *)previous_chunk + previous_chunk->capacity + sizeof(struct mem));
         if(new_chunk == NULL){
             return NULL;
         }
@@ -49,28 +76,21 @@ static void* allocate_chunk(struct mem* current_chunk, struct mem* const previou
 
     }
     /*split chunk in 2 we know there will be space to split in 2 due to when this function is called (see _malloc)*/
-    struct mem* next_chunk = (void*)current_chunk + sizeof(struct mem) + query;
+    struct mem* next_chunk = (void *)((uint8_t *)current_chunk + sizeof(struct mem) + query);
     size_t remaining_capacity = current_chunk->capacity - sizeof(struct mem) - query;
     assign_to_chunk(next_chunk, current_chunk->next, remaining_capacity, true);
     assign_to_chunk(current_chunk, next_chunk, query, false);
-    return (void*)current_chunk + sizeof(struct mem);
+    return (uint8_t *)current_chunk + sizeof(struct mem);
 }
 
 
-void* heap_init( size_t initial_size ){
+static void* heap_init( size_t initial_size ){
     g_mem_chunk_head = try_mmap(initial_size, HEAP_START);
     assign_to_chunk(g_mem_chunk_head, NULL, initial_size - sizeof(struct mem), true);
     return g_mem_chunk_head;
 }
 
-void  _free( void* mem ){
-    struct mem* chunk = mem - sizeof(struct mem);
-    //merge chunks if contiguous and free
-    if(chunk->next->is_free && chunk->next == mem + chunk->capacity){
-        assign_to_chunk(chunk, chunk->next->next, chunk->capacity + chunk->next->capacity + sizeof(mem), true);
-    }
-    chunk->is_free = true;
-}
+
 
 
 static void* try_mmap(size_t size, void* const addr){

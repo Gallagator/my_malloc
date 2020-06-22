@@ -23,19 +23,10 @@ struct mem  {
     size_t capacity;
     bool is_free;
 };
-
 #pragma pack(pop)
 
 void* _malloc( size_t query );
 
-static void* allocate_chunk(struct mem* const current_chunk, struct mem* const previous_chunk, size_t query);
-
 void  _free( void* mem );
-
-void* heap_init( size_t initial_size);
-
-static void* try_mmap(size_t size, void* const addr);
-
-static void assign_to_chunk(struct mem* chunk, void* next, size_t capacity, bool is_free);
 
 #endif

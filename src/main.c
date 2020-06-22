@@ -22,7 +22,5 @@ int main() {
     _free(k);
     _free(j);
 
-    memalloc_debug_heap(stdout, g_mem_chunk_head);
-
     return 0;
 }
