@@ -46,7 +46,7 @@ void* _malloc( size_t query ){
 void  _free( void* mem ){
     struct mem* chunk = (void *)((uint8_t *)mem - sizeof(struct mem));
     //merge chunks if contiguous and free
-    if(chunk->next->is_free && chunk->next == (void *)((uint8_t *)mem + chunk->capacity)){
+    while(chunk->next != NULL && chunk->next->is_free && chunk->next == (void *)((uint8_t *)mem + chunk->capacity)){
         assign_to_chunk(chunk, chunk->next->next, chunk->capacity + chunk->next->capacity + sizeof(mem), true);
     }
     chunk->is_free = true;
